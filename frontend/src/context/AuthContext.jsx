@@ -29,15 +29,19 @@ export const AuthProvider = ({ children }) => {
 
 
     const login = async (credentials) => {
-        const response = await authAPI.login(credentials);
-        const { accessToken, user: userData } = response.data.data;
+      try {
+       const response = await authAPI.login(credentials);
+       const { accessToken, user: userData } = response.data.data;
+    
+       localStorage.setItem('token', accessToken);
+       localStorage.setItem('user', JSON.stringify(userData));
+       setToken(accessToken);
+       setUser(userData);
 
-        localStorage.setItem('token', accessToken);
-        localStorage.setItem('user', JSON.stringify(userData));
-        setToken(accessToken);
-        setUser(userData);
-
-        return userData;
+       return userData;
+     } catch (err) {
+       throw err;
+     }
     };
 
     const register = async (data) => {
