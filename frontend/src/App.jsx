@@ -8,7 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Expenses from './pages/Expenses';
 import Categories from './pages/Categories';
 import Profile from './pages/Profile';
-import AppLayout from './components/AppLayout';
+import AppLayout from './components/layout/AppLayout';
 
 
 const App = () => {
