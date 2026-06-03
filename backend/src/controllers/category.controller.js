@@ -3,10 +3,9 @@ const CategoryModel = require('../models/category.model');
 const categoryController = {
   create: async (req, res, next) => {
     try {
-      const { name, color, icon } = req.body;
+      const { name, color, icon, budget, budgetPeriod, monthlyOverrides,monthlyBudgets,categoryType } = req.body;
       const userId = req.user.id;
 
-      // Check duplicate name for this user
       const existing = await CategoryModel.findByName(name, userId);
       if (existing) {
         return res.status(409).json({
@@ -15,7 +14,15 @@ const categoryController = {
         });
       }
 
-      const category = await CategoryModel.create({ userId, name, color, icon });
+      const category = await CategoryModel.create({ 
+        userId, 
+        name, 
+        color, 
+        icon,
+        budget: budget !== undefined ? budget : null,
+        budgetPeriod: budgetPeriod || 'monthly',
+        monthlyOverrides: monthlyOverrides || monthlyBudgets || {}
+       });
 
       res.status(201).json({
         status: 'success',
@@ -28,7 +35,11 @@ const categoryController = {
 
   findAll: async (req, res, next) => {
     try {
-      const categories = await CategoryModel.findAll(req.user.id);
+      const { startDate, endDate } = req.query;
+      const categories = await CategoryModel.findAll(req.user.id, {
+        startDate: startDate || null,
+        endDate: endDate || null,
+      });
 
       res.status(200).json({
         status: 'success',
@@ -61,12 +72,16 @@ const categoryController = {
   },
 
   update: async (req, res, next) => {
+    console.log('=== UPDATE BODY RAW ===', JSON.stringify(req.body));
     try {
-      const { name, color, icon } = req.body;
+      const { name, color, icon, budget, budgetPeriod, monthlyOverrides,monthlyBudgets,categoryType, } = req.body;
+      console.log('monthlyOverrides:', monthlyOverrides);   // ← add this
+    console.log('monthlyBudgets:', monthlyBudgets);       // ← add this
+    console.log('resolved:', monthlyOverrides || monthlyBudgets || {});
       const { id } = req.params;
       const userId = req.user.id;
 
-      // Check category exists and belongs to user
+
       const existing = await CategoryModel.findById(id, userId);
       if (!existing) {
         return res.status(404).json({
@@ -75,7 +90,6 @@ const categoryController = {
         });
       }
 
-      // If renaming — check new name not already taken
       if (name && name !== existing.name) {
         const duplicate = await CategoryModel.findByName(name, userId);
         if (duplicate) {
@@ -86,7 +100,15 @@ const categoryController = {
         }
       }
 
-      const category = await CategoryModel.update(id, userId, { name, color, icon });
+      const category = await CategoryModel.update(id, userId, { 
+        name, 
+        color, 
+        icon,
+        categoryType,
+        budget: budget !== undefined ? budget : existing.budget,
+        budgetPeriod: budgetPeriod || existing.budget_period || 'monthly',
+        monthlyOverrides: monthlyOverrides || monthlyBudgets || {}
+       });
 
       res.status(200).json({
         status: 'success',

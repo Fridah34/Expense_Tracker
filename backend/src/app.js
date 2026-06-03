@@ -2,6 +2,7 @@ const express = require ('express');
 const cors = require('cors');
 const helmet = require ('helmet');
 const morgan = require ('morgan');
+const cookieParser = require('cookie-parser');
 const errorMiddleware =require ('./middleware/error.middleware');
 const { globalLimiter, authLimiter, writeLimiter } =require ('./middleware/rateLimiter');
 
@@ -18,9 +19,11 @@ app.use(helmet());
 app.use(cors({
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type'],
     credentials:true,
 }));
+
+app.use (cookieParser());
 
 app.use(express.json({ limit: '10kb'}));
 
@@ -31,8 +34,11 @@ app.use(morgan('dev'));
 }else {
     app.use(morgan('combined'));
 }
-
-app.use('/api', globalLimiter);
+;
+// ─── Rate Limiting ──────────────────────────────────────────────────
+app.use('/api/users', globalLimiter);
+app.use('/api/expenses',globalLimiter, writeLimiter);
+app.use('/api/categories',globalLimiter, writeLimiter);
 
 
 app.use('/api/auth', authRoutes);
@@ -40,17 +46,6 @@ app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/expenses', expenseRoutes);
 
-app.use('/api/expenses', (req, res, next) => {
-  console.log('>>> HIT expense router', req.method, req.url);
-  next();
-});
-app.use('/api/expenses', expenseRoutes);
-
-// ─── Rate Limiting ──────────────────────────────────────────────────
-app.use('/api', globalLimiter);
-app.use('/api/auth', authLimiter);
-app.use('/api/expenses', writeLimiter);
-app.use('/api/categories', writeLimiter);
 
 //Health check-used by docker/deployment tools to check if the app is alive
 app.get('/health', (req,res) => {

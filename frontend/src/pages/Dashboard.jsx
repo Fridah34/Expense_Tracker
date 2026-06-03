@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   TrendingUp, TrendingDown, Scale, PiggyBank,
-  Building2, AlertTriangle, CheckCircle2, Plus,
+  Building2, AlertTriangle,ChevronLeft, ChevronRight, CheckCircle2, Plus,
   ReceiptText, BarChart3, ArrowRight,
 } from 'lucide-react';
 import { expenseAPI, categoryAPI } from '../services/api';
@@ -21,7 +21,7 @@ const fmtShort = (n) =>
     maximumFractionDigits: 0,
   })}`;
 
-const getPeriodDates = (period) => {
+const getPeriodDates = (period, offset = 0) => {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth();
@@ -30,30 +30,38 @@ const getPeriodDates = (period) => {
   if (period === 'weekly') {
     const dow = now.getDay();
     const monday = new Date(now);
-    monday.setDate(d - (dow === 0 ? 6 : dow - 1));
+    monday.setDate(d - (dow === 0 ? 6 : dow - 1) + offset * 7);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
     return {
       startDate: monday.toISOString().slice(0, 10),
       endDate: sunday.toISOString().slice(0, 10),
-      label: `Week of ${monday.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}`,
+      label: `Week of ${monday.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}`,
       short: 'week',
+      isCurrentPeriod: offset === 0,
     };
   }
   if (period === 'yearly') {
+    const  targetYear = y + offset;
     return {
-      startDate: `${y}-01-01`,
-      endDate: `${y}-12-31`,
-      label: `Year ${y}`,
+      startDate: `${targetYear}-01-01`,
+      endDate: `${targetYear}-12-31`,
+      label: `Year ${targetYear}`,
       short: 'year',
+      isCurrentPeriod: offset === 0,
     };
   }
-  const lastDay = new Date(y, m + 1, 0).getDate();
+
+  const targetDate = new Date(y, m + offset, 1);
+  const ty = targetDate.getFullYear();
+  const tm = targetDate.getMonth();
+  const lastDay = new Date(ty, tm + 1, 0).getDate();
   return {
-    startDate: `${y}-${String(m + 1).padStart(2, '0')}-01`,
-    endDate: `${y}-${String(m + 1).padStart(2, '0')}-${lastDay}`,
-    label: now.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' }),
+    startDate: `${ty}-${String(tm + 1).padStart(2, '0')}-01`,
+    endDate: `${ty}-${String(tm + 1).padStart(2, '0')}-${lastDay}`,
+    label: targetDate.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' }),
     short: 'month',
+    isCurrentPeriod: offset === 0,
   };
 };
 
@@ -285,16 +293,24 @@ const CategoryBudgetRow = ({ cat, totalIncome }) => {
 const Dashboard = () => {
   const { user } = useAuth();
   const [period, setPeriod]       = useState('monthly');
+  const [offset, setOffset]   = useState(0);  
   const [summary, setSummary]     = useState(null);
   const [expenses, setExpenses]   = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
 
-  const { startDate, endDate, label, short } = getPeriodDates(period);
+  const { startDate, endDate, label, short, isCurrentPeriod  } = getPeriodDates(period, offset);
 
   const hr = new Date().getHours();
   const greeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+
+  // Reset offset when period type changes
+const handlePeriodChange = (p) => {
+  setPeriod(p);
+  setOffset(0);  // ← reset to current when switching week/month/year
+};
+
 
   useEffect(() => {
     const load = async () => {
@@ -303,7 +319,7 @@ const Dashboard = () => {
         const [sRes, eRes, cRes] = await Promise.all([
           expenseAPI.getSummary({ startDate, endDate }),
           expenseAPI.getAll({ limit: 6, page: 1 }),
-          categoryAPI.getAll(),
+          categoryAPI.getAll({ startDate, endDate}),
         ]);
         setSummary(sRes.data.data.summary);
         setExpenses(eRes.data.data.expenses);
@@ -366,13 +382,36 @@ const Dashboard = () => {
             Financial snapshot · {label}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+
+          {/* Prev / Next arrows + label */}
+  <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
+    <button
+      onClick={() => setOffset(o => o - 1)}
+      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-white hover:text-gray-800 transition-all"
+    >
+      <ChevronLeft size={15} />
+    </button>
+
+    <span className="text-xs font-semibold text-gray-700 px-2 min-w-27.5 text-center">
+      {label}
+    </span>
+
+    <button
+      onClick={() => setOffset(o => o + 1)}
+      disabled={isCurrentPeriod}
+      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-white hover:text-gray-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+    >
+      <ChevronRight size={15} />
+    </button>
+  </div>
+
           {/* Period switcher */}
           <div className="flex bg-gray-100 rounded-xl p-1 gap-0.5">
             {[['weekly', 'Week'], ['monthly', 'Month'], ['yearly', 'Year']].map(([p, lbl]) => (
               <button
                 key={p}
-                onClick={() => setPeriod(p)}
+                onClick={() => handlePeriodChange(p)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   period === p
                     ? 'bg-indigo-600 text-white shadow-sm'
@@ -383,6 +422,16 @@ const Dashboard = () => {
               </button>
             ))}
           </div>
+
+          {/* Today reset — only shows when not on current period */}
+  {!isCurrentPeriod && (
+    <button
+      onClick={() => setOffset(0)}
+      className="text-xs font-semibold text-indigo-600 hover:underline px-2"
+    >
+      Today
+    </button>
+  )}
           <Link
             to="/expenses"
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm"
