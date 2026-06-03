@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Search, X, Pencil, Trash2, Check,
   TrendingUp, TrendingDown, AlertCircle, ReceiptText,
-  ChevronLeft, ChevronRight, SlidersHorizontal,
+  ChevronLeft, ChevronRight, SlidersHorizontal
 } from 'lucide-react';
 import { expenseAPI, categoryAPI } from '../services/api';
 
@@ -11,6 +11,38 @@ const fmt = (n) =>
   `KES ${Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtDate = (d) =>
   new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+
+const MONTHS = [
+  { value: '', label: 'All months' },
+  { value: '01', label: 'January' },
+  { value: '02', label: 'February' },
+  { value: '03', label: 'March' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'May' },
+  { value: '06', label: 'June' },
+  { value: '07', label: 'July' },
+  { value: '08', label: 'August' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
+// ─── Get date range for a month ─────────────────────────────────────────────
+const getMonthDateRange = (month, year = new Date().getFullYear()) => {
+  if (!month) return { startDate: '', endDate: '' };
+  
+  const startDate = `${year}-${month}-01`;
+  const lastDay = new Date(year, parseInt(month), 0).getDate();
+  const endDate = `${year}-${month}-${lastDay}`;
+  
+  return { startDate, endDate };
+};
+
+const YEARS = Array.from({ length: 5 }, (_, i) => {
+  const y = new Date().getFullYear();
+  return { value: (y - i).toString(), label: (y - i).toString() };
+});
 
 // ─── Spinner ──────────────────────────────────────────────────────────────────
 const Spinner = ({ cls = 'w-4 h-4 border-white/30 border-t-white' }) => (
@@ -282,6 +314,8 @@ const Expenses = () => {
   const [error,      setError]      = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [filters, setFilters] = useState({
     type: '', categoryId: '', startDate: '', endDate: '', search: '', page: 1,
   });
@@ -319,16 +353,39 @@ const Expenses = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleMonthChange = (month) => {
+  setSelectedMonth(month);
+  if (month) {
+    const { startDate, endDate } = getMonthDateRange(month, selectedYear);
+    setFilters((p) => ({ ...p, startDate, endDate, page: 1 }));
+  } else {
+    setFilters((p) => ({ ...p, startDate: '', endDate: '', page: 1 }));
+  }
+};
+
+  const handleYearChange = (year) => {
+  setSelectedYear(year);
+  if (selectedMonth) {
+    const { startDate, endDate } = getMonthDateRange(selectedMonth, year);
+    setFilters((p) => ({ ...p, startDate, endDate, page: 1 }));
+  }
+};
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   const setFilter    = (k, v) => setFilters((p) => ({ ...p, [k]: v, page: 1 }));
-  const clearFilters = ()     => setFilters({ type: '', categoryId: '', startDate: '', endDate: '', search: '', page: 1 });
+  const clearFilters = ()     => {
+    setFilters({ type: '', categoryId: '', startDate: '', endDate: '', search: '', page: 1 });
+    setSelectedMonth('');
+    setSelectedYear(new Date().getFullYear().toString());
+  };
   const hasFilters   = filters.type || filters.categoryId || filters.startDate || filters.endDate || filters.search;
-  const activeFilterCount = [filters.type, filters.categoryId, filters.startDate, filters.endDate].filter(Boolean).length;
+  const activeFilterCount = [filters.type, filters.categoryId, filters.startDate, filters.endDate, selectedMonth].filter(Boolean).length;
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   const handleAdd    = async (data) => { await expenseAPI.create(data);             setShowAdd(false); load(); };
   const handleEdit   = async (data) => { await expenseAPI.update(editing.id, data); setEditing(null);  load(); };
   const handleDelete = async ()     => { await expenseAPI.delete(deleting.id);      setDeleting(null); load(); };
+
 
   return (
     <div className="space-y-5">
@@ -386,6 +443,34 @@ const Expenses = () => {
             ))}
           </div>
 
+          {/* Month filter */}
+<select
+  className="h-9 px-3 text-sm border border-gray-200 rounded-xl bg-gray-50 text-gray-700 outline-none focus:border-indigo-400 cursor-pointer"
+  value={selectedMonth}
+  onChange={(e) => {
+    setSelectedMonth(e.target.value);
+    const { startDate, endDate } = getMonthDateRange(e.target.value, selectedYear);
+    setFilters((p) => ({ ...p, startDate, endDate, page: 1 }));
+  }}
+>
+  <option value="">All months</option>
+  {MONTHS.slice(1).map((m) => (
+    <option key={m.value} value={m.value}>{m.label}</option>
+  ))}
+</select>
+
+{/* Year filter */}
+<select
+  className="h-9 px-3 text-sm border border-gray-200 rounded-xl bg-gray-50 text-gray-700 outline-none focus:border-indigo-400 cursor-pointer"
+  value={selectedYear}
+  onChange={(e) => handleYearChange(e.target.value)}
+>
+  {YEARS.map((y) => (
+    <option key={y.value} value={y.value}>{y.label}</option>
+  ))}
+</select>
+
+
           {/* More filters toggle */}
           <button
             onClick={() => setShowFilters((v) => !v)}
@@ -427,6 +512,35 @@ const Expenses = () => {
               <option value="">All categories</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+
+            {/* Month filter - ADD THIS */}
+<select
+  className="h-9 px-3 text-sm border border-gray-200 rounded-xl bg-gray-50 text-gray-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-colors cursor-pointer"
+  value={selectedMonth}
+  onChange={(e) => handleMonthChange(e.target.value)}
+>
+  <option value="">All months</option>
+  {MONTHS.slice(1).map((m) => (
+    <option key={m.value} value={m.value}>{m.label}</option>
+  ))}
+</select>
+
+{/* Year filter - ADD THIS */}
+<select
+  className="h-9 px-3 text-sm border border-gray-200 rounded-xl bg-gray-50 text-gray-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-colors cursor-pointer"
+  value={selectedYear}
+  onChange={(e) => {
+    setSelectedYear(e.target.value);
+    if (selectedMonth) {
+      const { startDate, endDate } = getMonthDateRange(selectedMonth, e.target.value);
+      setFilters((p) => ({ ...p, startDate, endDate, page: 1 }));
+    }
+  }}
+>
+  {YEARS.map((y) => (
+    <option key={y.value} value={y.value}>{y.label}</option>
+  ))}
+</select>
 
             {/* Date range */}
             <div className="flex items-center gap-2">
@@ -501,7 +615,7 @@ const Expenses = () => {
               <span />
             </div>
 
-            {expenses.map((tx, i) => {
+            {expenses.map((tx) => {
               const isIncome = tx.type === 'income';
               return (
                 <div
@@ -557,14 +671,14 @@ const Expenses = () => {
                     <button
                       onClick={() => setEditing(tx)}
                       title="Edit"
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors "
                     >
                       <Pencil size={13} />
                     </button>
                     <button
                       onClick={() => setDeleting(tx)}
                       title="Delete"
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors "
                     >
                       <Trash2 size={13} />
                     </button>
